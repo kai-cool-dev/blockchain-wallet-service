@@ -55,6 +55,7 @@ application_build_and_push_latest:
     - docker push ${CONTAINER_IMAGE}:latest
   only:
     - master
+    - main
 
 ####
 # Update Documentation in Confluence
