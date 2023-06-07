@@ -1,0 +1,73 @@
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_DRIVER: overlay2
+  CONTAINER_IMAGE: ${CI_REGISTRY_IMAGE}
+
+
+image: docker:latest
+
+stages:
+  - lint
+  - build
+  - build_latest
+  - doc
+
+####
+# Lint Dockerfile
+####
+
+docker_lint:
+  stage: lint
+  image: hadolint/hadolint:latest-debian
+  script:
+    - hadolint Dockerfile
+  allow_failure: true
+
+####
+# Build Dockerfile
+####
+
+application_build_and_push:
+  stage: build
+  services:
+    - docker:dind
+  script:
+    - docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+    - echo Tag Image with ${CONTAINER_IMAGE}:${CI_COMMIT_SHA}
+    - docker build -t ${CONTAINER_IMAGE}:${CI_COMMIT_SHA} ./
+    - echo Push Image with ${CONTAINER_IMAGE}:${CI_COMMIT_SHA}
+    - docker push ${CONTAINER_IMAGE}:${CI_COMMIT_SHA}
+
+####
+# retag to LATEST (only if master)
+####
+
+application_build_and_push_latest:
+  stage: build_latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+    - docker pull ${CONTAINER_IMAGE}:${CI_COMMIT_SHA}
+    - docker tag ${CONTAINER_IMAGE}:${CI_COMMIT_SHA} ${CONTAINER_IMAGE}:master
+    - docker push ${CONTAINER_IMAGE}:master
+    - docker tag ${CONTAINER_IMAGE}:${CI_COMMIT_SHA} ${CONTAINER_IMAGE}:latest
+    - docker push ${CONTAINER_IMAGE}:latest
+  only:
+    - master
+
+####
+# Update Documentation in Confluence
+####
+
+confluence_doc:
+  stage: doc
+  image:
+    name: registry.gitlab.com/pazdzewicz_docker/ci-helper:latest
+  script:
+  - /ci_tools/push_markdown_confluence.sh README.md
+  allow_failure: true
+  only:
+    - master
+    - main
+
